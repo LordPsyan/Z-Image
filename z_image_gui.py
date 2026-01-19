@@ -107,19 +107,66 @@ class ZImageGUI:
         image_frame = ttk.LabelFrame(control_frame, text="Image Settings", padding="5")
         image_frame.pack(fill=tk.X, pady=(0, 10))
         
-        # Resolution dropdown (combined width and height)
+        # Get current screen size for default
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        
+        # Resolution dropdown with more options based on screen sizes
         ttk.Label(image_frame, text="Resolution:").grid(row=0, column=0, sticky=tk.W, pady=2)
         resolution_options = [
+            # Square formats
+            "256x256",
             "512x512",
             "768x768", 
             "1024x1024",
+            "1536x1536",
+            "2048x2048",
+            
+            # Standard (4:3)
+            "640x480",
+            "800x600",
+            "1024x768",
+            "1280x960",
+            "1600x1200",
+            
+            # Wide (16:9)
+            "854x480",
             "1280x720",
+            "1366x768",
+            "1600x900",
             "1920x1080",
             "2560x1440",
-            "3840x2160"
+            "3840x2160",
+            
+            # Ultra-wide (21:9)
+            "2560x1080",
+            "3440x1440",
+            "5120x2160",
+            
+            # Mobile formats
+            "1080x1920",
+            "750x1334",
+            "828x1792",
+            "1242x2688"
         ]
-        self.resolution_var = tk.StringVar(value="512x512")
-        self.resolution_combo = ttk.Combobox(image_frame, textvariable=self.resolution_var, values=resolution_options, width=15, state="readonly")
+        
+        # Set default to current screen resolution or closest match
+        default_resolution = f"{screen_width}x{screen_height}"
+        if default_resolution not in resolution_options:
+            # Find closest standard resolution
+            if screen_width >= 3840:
+                default_resolution = "3840x2160"
+            elif screen_width >= 2560:
+                default_resolution = "2560x1440"
+            elif screen_width >= 1920:
+                default_resolution = "1920x1080"
+            elif screen_width >= 1366:
+                default_resolution = "1366x768"
+            else:
+                default_resolution = "1280x720"
+        
+        self.resolution_var = tk.StringVar(value=default_resolution)
+        self.resolution_combo = ttk.Combobox(image_frame, textvariable=self.resolution_var, values=resolution_options, width=20, state="readonly")
         self.resolution_combo.grid(row=0, column=1, pady=2, sticky=tk.W)
         
         # Steps
@@ -226,44 +273,59 @@ class ZImageGUI:
     def toggle_theme(self):
         """Toggle between dark and light theme for entire window"""
         if self.dark_mode.get():
-            # Dark theme
+            # Dark theme with better contrast
             style = ttk.Style()
             style.theme_use('default')
             
-            # Configure dark theme colors
-            bg_color = "#2b2b2b"
-            fg_color = "#ffffff"
-            select_bg = "#4a4a4a"
+            # Configure dark theme colors with better contrast
+            bg_color = "#1e1e1e"  # Darker background
+            fg_color = "#ffffff"  # Pure white text
+            disabled_fg = "#888888"  # Gray for disabled text
+            select_bg = "#404040"  # Medium dark for buttons
+            frame_bg = "#2d2d2d"  # Slightly lighter than main bg
             
-            # Configure styles
+            # Configure styles with better contrast
             style.configure('.', background=bg_color, foreground=fg_color)
-            style.configure('TLabel', background=bg_color, foreground=fg_color)
-            style.configure('TButton', background=select_bg, foreground=fg_color)
-            style.configure('TLabelFrame', background=bg_color, foreground=fg_color)
-            style.configure('TFrame', background=bg_color)
-            style.configure('TEntry', fieldbackground=bg_color, foreground=fg_color)
-            style.configure('TCombobox', fieldbackground=bg_color, background=select_bg, foreground=fg_color)
+            style.configure('TLabel', background=frame_bg, foreground=fg_color, font=('Arial', 9))
+            style.configure('TButton', background=select_bg, foreground=fg_color, font=('Arial', 9, 'bold'))
+            style.configure('TLabelFrame', background=frame_bg, foreground=fg_color, font=('Arial', 10, 'bold'))
+            style.configure('TFrame', background=frame_bg)
+            style.configure('TEntry', fieldbackground=bg_color, foreground=fg_color, font=('Arial', 9))
+            style.configure('TCombobox', fieldbackground=bg_color, background=select_bg, foreground=fg_color, font=('Arial', 9))
+            
+            # Configure disabled button style
+            style.map('TButton', 
+                     background=[('disabled', '#2a2a2a')],
+                     foreground=[('disabled', disabled_fg)])
             
             # Configure root
             self.root.configure(bg=bg_color)
             
         else:
-            # Light theme - reset to default
+            # Light theme with better contrast
             style = ttk.Style()
             style.theme_use('default')
             
-            bg_color = "#f0f0f0"
-            fg_color = "#000000"
-            select_bg = "#d0d0d0"
+            # Configure light theme colors with better contrast
+            bg_color = "#ffffff"  # Pure white background
+            fg_color = "#000000"  # Pure black text
+            disabled_fg = "#666666"  # Gray for disabled text
+            select_bg = "#e0e0e0"  # Light gray for buttons
+            frame_bg = "#f5f5f5"  # Very light gray for frames
             
-            # Configure light theme colors
+            # Configure light theme colors with better contrast
             style.configure('.', background=bg_color, foreground=fg_color)
-            style.configure('TLabel', background=bg_color, foreground=fg_color)
-            style.configure('TButton', background=select_bg, foreground=fg_color)
-            style.configure('TLabelFrame', background=bg_color, foreground=fg_color)
-            style.configure('TFrame', background=bg_color)
-            style.configure('TEntry', fieldbackground=bg_color, foreground=fg_color)
-            style.configure('TCombobox', fieldbackground=bg_color, background=select_bg, foreground=fg_color)
+            style.configure('TLabel', background=frame_bg, foreground=fg_color, font=('Arial', 9))
+            style.configure('TButton', background=select_bg, foreground=fg_color, font=('Arial', 9, 'bold'))
+            style.configure('TLabelFrame', background=frame_bg, foreground=fg_color, font=('Arial', 10, 'bold'))
+            style.configure('TFrame', background=frame_bg)
+            style.configure('TEntry', fieldbackground=bg_color, foreground=fg_color, font=('Arial', 9))
+            style.configure('TCombobox', fieldbackground=bg_color, background=select_bg, foreground=fg_color, font=('Arial', 9))
+            
+            # Configure disabled button style
+            style.map('TButton', 
+                     background=[('disabled', '#f0f0f0')],
+                     foreground=[('disabled', disabled_fg)])
             
             # Configure root
             self.root.configure(bg=bg_color)
@@ -274,15 +336,15 @@ class ZImageGUI:
     def apply_direct_theme_changes(self):
         """Apply theme changes directly to specific widgets"""
         if self.dark_mode.get():
-            # Dark theme colors
-            bg_color = "#2b2b2b"
+            # Dark theme colors with better contrast
+            bg_color = "#1e1e1e"
             fg_color = "#ffffff"
-            canvas_bg = "#1e1e1e"
+            canvas_bg = "#2d2d2d"
         else:
-            # Light theme colors
-            bg_color = "#f0f0f0"
+            # Light theme colors with better contrast
+            bg_color = "#ffffff"
             fg_color = "#000000"
-            canvas_bg = "#ffffff"
+            canvas_bg = "#f5f5f5"
         
         # Apply to specific widgets directly
         try:
@@ -290,7 +352,7 @@ class ZImageGUI:
             self.canvas.configure(bg=canvas_bg)
             
             # Text widget (prompt input)
-            self.prompt_text.configure(bg=canvas_bg, fg=fg_color, insertbackground=fg_color)
+            self.prompt_text.configure(bg=canvas_bg, fg=fg_color, insertbackground=fg_color, font=('Arial', 10))
             
             # Status bar
             if hasattr(self, 'status_var'):
@@ -360,6 +422,20 @@ class ZImageGUI:
         
         threading.Thread(target=load_in_thread, daemon=True).start()
         
+    def adjust_dimensions_for_model(self, width, height):
+        """Adjust dimensions to be divisible by 16 while preserving aspect ratio"""
+        # Round down to nearest multiple of 16
+        adjusted_width = (width // 16) * 16
+        adjusted_height = (height // 16) * 16
+        
+        # Ensure minimum dimensions
+        if adjusted_width < 256:
+            adjusted_width = 256
+        if adjusted_height < 256:
+            adjusted_height = 256
+        
+        return adjusted_width, adjusted_height
+    
     def generate(self):
         if not self.pipeline:
             messagebox.showwarning("Warning", "Please load a model first")
@@ -376,9 +452,17 @@ class ZImageGUI:
                 self.progress.start()
                 self.generate_button.config(state=tk.DISABLED)
                 
-                # Get parameters
+                # Get parameters and adjust for model requirements
                 resolution = self.resolution_var.get()
                 width, height = map(int, resolution.split('x'))
+                
+                # Adjust dimensions to be divisible by 16
+                adjusted_width, adjusted_height = self.adjust_dimensions_for_model(width, height)
+                
+                # Show if dimensions were adjusted
+                if (width, height) != (adjusted_width, adjusted_height):
+                    self.status_var.set(f"Adjusted dimensions: {width}x{height} → {adjusted_width}x{adjusted_height}")
+                
                 steps = int(self.steps_var.get())
                 guidance = float(self.guidance_var.get())
                 
@@ -392,8 +476,8 @@ class ZImageGUI:
                 self.status_var.set("Generating image...")
                 result = self.pipeline(
                     prompt=prompt,
-                    width=width,
-                    height=height,
+                    width=adjusted_width,
+                    height=adjusted_height,
                     num_inference_steps=steps,
                     guidance_scale=guidance,
                     generator=generator
@@ -466,19 +550,26 @@ class ZImageGUI:
             return
             
         try:
-            # Generate filename with timestamp
+            # Generate default filename with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            
-            # Get prompt for filename
             prompt = self.prompt_text.get("1.0", tk.END).strip()
             prompt_short = prompt[:50].replace(" ", "_").replace("/", "_").replace("\\", "_")
+            default_filename = f"zimage_{timestamp}_{prompt_short}.png"
             
-            # Save image
-            filename = f"zimage_{timestamp}_{prompt_short}.png"
-            filepath = os.path.join(self.output_dir, filename)
+            # Open file dialog to select save location
+            filepath = filedialog.asksaveasfilename(
+                title="Save Image",
+                defaultextension=".png",
+                filetypes=[("PNG files", "*.png"), ("JPEG files", "*.jpg"), ("All files", "*.*")],
+                initialfile=default_filename
+            )
             
+            if not filepath:
+                return  # User cancelled
+            
+            # Save image to selected location
             self.current_image.save(filepath)
-            self.status_var.set(f"Image saved: {filename}")
+            self.status_var.set(f"Image saved: {os.path.basename(filepath)}")
             messagebox.showinfo("Success", f"Image saved to:\n{filepath}")
             
         except Exception as e:
@@ -524,9 +615,13 @@ class ZImageGUI:
                 self.progress.start()
                 self.generate_button.config(state=tk.DISABLED)
                 
-                # Get parameters
+                # Get parameters and adjust for model requirements
                 resolution = self.resolution_var.get()
                 width, height = map(int, resolution.split('x'))
+                
+                # Adjust dimensions to be divisible by 16
+                adjusted_width, adjusted_height = self.adjust_dimensions_for_model(width, height)
+                
                 steps = int(self.steps_var.get())
                 guidance = float(self.guidance_var.get())
                 
@@ -535,8 +630,8 @@ class ZImageGUI:
                     
                     result = self.pipeline(
                         prompt=prompt,
-                        width=width,
-                        height=height,
+                        width=adjusted_width,
+                        height=adjusted_height,
                         num_inference_steps=steps,
                         guidance_scale=guidance
                     )
