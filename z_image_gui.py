@@ -21,7 +21,7 @@ class ZImageGUI:
         self.current_image = None
         self.output_dir = "outputs"
         self.device_status = tk.StringVar(value="Device: Unknown")
-        self.dark_mode = tk.BooleanVar(value=False)
+        self.dark_mode = tk.BooleanVar(value=True)
         
         # Create output directory
         os.makedirs(self.output_dir, exist_ok=True)
@@ -205,11 +205,15 @@ class ZImageGUI:
         self.load_button = ttk.Button(button_frame, text="Load Model", command=self.load_model)
         self.load_button.pack(fill=tk.X, pady=2)
         
-        self.generate_button = ttk.Button(button_frame, text="Generate", command=self.generate, state=tk.DISABLED)
-        self.generate_button.pack(fill=tk.X, pady=2)
+        # Create a frame for generate and save buttons to be side by side
+        generate_save_frame = ttk.Frame(button_frame)
+        generate_save_frame.pack(fill=tk.X, pady=2)
         
-        self.save_button = ttk.Button(button_frame, text="Save", command=self.save_output, state=tk.DISABLED)
-        self.save_button.pack(fill=tk.X, pady=2)
+        self.generate_button = ttk.Button(generate_save_frame, text="Generate", command=self.generate, state=tk.DISABLED)
+        self.generate_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 2))
+        
+        self.save_button = ttk.Button(generate_save_frame, text="Save", command=self.save_output, state=tk.DISABLED)
+        self.save_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(2, 0))
         
         # Batch processing
         batch_frame = ttk.LabelFrame(control_frame, text="Batch Processing", padding="5")
@@ -246,6 +250,9 @@ class ZImageGUI:
         # Progress bar
         self.progress = ttk.Progressbar(main_frame, mode='indeterminate')
         self.progress.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(5, 0))
+        
+        # Apply initial theme after all widgets are created
+        self.toggle_theme()
         
     def toggle_theme_click(self, event):
         """Handle toggle button click"""
@@ -293,6 +300,11 @@ class ZImageGUI:
             style.configure('TEntry', fieldbackground=bg_color, foreground=fg_color, font=('Arial', 9))
             style.configure('TCombobox', fieldbackground=bg_color, background=select_bg, foreground=fg_color, font=('Arial', 9))
             
+            # Configure dropdown list colors
+            style.configure('TCombobox.Listbox', background=bg_color, foreground=fg_color, selectbackground=select_bg, selectforeground=fg_color)
+            style.configure('Combobox.Popdown', background=bg_color, foreground=fg_color)
+            style.configure('Treeview', background=bg_color, foreground=fg_color, fieldbackground=bg_color)
+            
             # Configure disabled button style
             style.map('TButton', 
                      background=[('disabled', '#2a2a2a')],
@@ -322,6 +334,11 @@ class ZImageGUI:
             style.configure('TEntry', fieldbackground=bg_color, foreground=fg_color, font=('Arial', 9))
             style.configure('TCombobox', fieldbackground=bg_color, background=select_bg, foreground=fg_color, font=('Arial', 9))
             
+            # Configure dropdown list colors
+            style.configure('TCombobox.Listbox', background=bg_color, foreground=fg_color, selectbackground=select_bg, selectforeground=fg_color)
+            style.configure('Combobox.Popdown', background=bg_color, foreground=fg_color)
+            style.configure('Treeview', background=bg_color, foreground=fg_color, fieldbackground=bg_color)
+            
             # Configure disabled button style
             style.map('TButton', 
                      background=[('disabled', '#f0f0f0')],
@@ -332,6 +349,28 @@ class ZImageGUI:
         
         # Apply to specific widgets directly
         self.apply_direct_theme_changes()
+        
+        # Apply theme to combobox directly
+        if hasattr(self, 'resolution_combo'):
+            # Keep font color consistent regardless of theme
+            self.resolution_combo.configure(foreground="#000000")
+            
+            if self.dark_mode.get():
+                self.resolution_combo.configure(background="#404040")
+                # Force fieldbackground through style
+                style = ttk.Style()
+                style.configure('Custom.TCombobox', fieldbackground="#1e1e1e", background="#404040", foreground="#000000")
+                self.resolution_combo.configure(style='Custom.TCombobox')
+            else:
+                self.resolution_combo.configure(background="#e0e0e0")
+                # Force fieldbackground through style
+                style = ttk.Style()
+                style.configure('Custom.TCombobox', fieldbackground="#ffffff", background="#e0e0e0", foreground="#000000")
+                self.resolution_combo.configure(style='Custom.TCombobox')
+            
+            # Bind events to fix dropdown colors
+            self.resolution_combo.bind('<ButtonPress-1>', self.fix_combobox_dropdown)
+            self.resolution_combo.bind('<KeyPress-Down>', self.fix_combobox_dropdown)
     
     def apply_direct_theme_changes(self):
         """Apply theme changes directly to specific widgets"""
@@ -362,6 +401,38 @@ class ZImageGUI:
         except Exception as e:
             print(f"Direct theme error: {e}")
             pass
+    
+    def fix_combobox_dropdown(self, event):
+        """Fix combobox dropdown colors when opened"""
+        try:
+            # Schedule the fix to run after the dropdown is displayed
+            self.root.after(100, self._apply_dropdown_colors)
+        except Exception as e:
+            print(f"Dropdown fix error: {e}")
+    
+    def _apply_dropdown_colors(self):
+        """Apply colors to the dropdown listbox"""
+        try:
+            # Find the listbox widget in the combobox
+            combobox = self.resolution_combo
+            listbox = None
+            
+            # Try to find the listbox child
+            for child in combobox.winfo_children():
+                if str(child).endswith('listbox'):
+                    listbox = child
+                    break
+            
+            if listbox:
+                # Keep font color consistent regardless of theme
+                listbox.configure(fg="#000000")
+                
+                if self.dark_mode.get():
+                    listbox.configure(bg="#1e1e1e", selectbackground="#404040")
+                else:
+                    listbox.configure(bg="#ffffff", selectbackground="#e0e0e0")
+        except Exception as e:
+            print(f"Listbox color error: {e}")
     
     def random_seed(self):
         import random
