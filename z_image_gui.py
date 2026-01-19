@@ -96,6 +96,21 @@ class ZImageGUI:
         # Initialize toggle position
         self.update_toggle_visual()
         
+        # Model settings
+        model_frame = ttk.LabelFrame(control_frame, text="Model", padding="5")
+        model_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.model_var = tk.StringVar(value="Tongyi-MAI/Z-Image-Turbo")
+        models = [
+            "Tongyi-MAI/Z-Image-Turbo"
+        ]
+        self.model_combo = ttk.Combobox(model_frame, textvariable=self.model_var, values=models, width=35)
+        self.model_combo.pack(fill=tk.X)
+        
+        # Load Model button
+        self.load_button = ttk.Button(model_frame, text="Load Model", command=self.load_model)
+        self.load_button.pack(fill=tk.X, pady=(5, 0))
+        
         # Prompt input
         prompt_frame = ttk.LabelFrame(control_frame, text="Prompt", padding="5")
         prompt_frame.pack(fill=tk.X, pady=(0, 10))
@@ -187,23 +202,9 @@ class ZImageGUI:
         # Random seed button
         ttk.Button(image_frame, text="Random", command=self.random_seed, width=8).grid(row=3, column=2, pady=2, padx=(10, 0), sticky=tk.W)
         
-        # Model settings
-        model_frame = ttk.LabelFrame(control_frame, text="Model", padding="5")
-        model_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        self.model_var = tk.StringVar(value="Tongyi-MAI/Z-Image-Turbo")
-        models = [
-            "Tongyi-MAI/Z-Image-Turbo"
-        ]
-        self.model_combo = ttk.Combobox(model_frame, textvariable=self.model_var, values=models, width=35)
-        self.model_combo.pack(fill=tk.X)
-        
         # Action buttons
         button_frame = ttk.Frame(control_frame)
         button_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        self.load_button = ttk.Button(button_frame, text="Load Model", command=self.load_model)
-        self.load_button.pack(fill=tk.X, pady=2)
         
         # Create a frame for generate and save buttons to be side by side
         generate_save_frame = ttk.Frame(button_frame)
