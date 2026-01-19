@@ -23,6 +23,17 @@ class ZImageGUI:
         self.device_status = tk.StringVar(value="Device: Unknown")
         self.dark_mode = tk.BooleanVar(value=True)
         
+        # Zoom variables
+        self.zoom_level = 1.0
+        self.min_zoom = 0.1
+        self.max_zoom = 5.0
+        self.zoom_step = 0.1
+        self.image_x = 0
+        self.image_y = 0
+        self.canvas_image = None
+        self.drag_start_x = None
+        self.drag_start_y = None
+        
         # Create output directory
         os.makedirs(self.output_dir, exist_ok=True)
         
@@ -117,6 +128,10 @@ class ZImageGUI:
         
         self.prompt_text = scrolledtext.ScrolledText(prompt_frame, height=4, width=40)
         self.prompt_text.pack(fill=tk.X)
+        
+        # Bind focus events to prevent arrow key navigation when typing
+        self.prompt_text.bind("<FocusIn>", self.on_prompt_focus_in)
+        self.prompt_text.bind("<FocusOut>", self.on_prompt_focus_out)
         
         # Image settings
         image_frame = ttk.LabelFrame(control_frame, text="Image Settings", padding="5")
@@ -237,11 +252,43 @@ class ZImageGUI:
         output_frame = ttk.LabelFrame(main_frame, text="Output", padding="10")
         output_frame.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S))
         output_frame.columnconfigure(0, weight=1)
-        output_frame.rowconfigure(0, weight=1)
+        output_frame.rowconfigure(1, weight=1)
+        
+        # Zoom controls frame
+        zoom_frame = ttk.Frame(output_frame)
+        zoom_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
+        
+        ttk.Label(zoom_frame, text="Zoom:").pack(side=tk.LEFT, padx=(0, 5))
+        
+        self.zoom_label = ttk.Label(zoom_frame, text="100%")
+        self.zoom_label.pack(side=tk.LEFT, padx=(0, 10))
+        
+        ttk.Button(zoom_frame, text="-", command=self.zoom_out, width=3).pack(side=tk.LEFT, padx=(0, 2))
+        ttk.Button(zoom_frame, text="+", command=self.zoom_in, width=3).pack(side=tk.LEFT, padx=(0, 2))
+        ttk.Button(zoom_frame, text="Fit", command=self.fit_to_window, width=4).pack(side=tk.LEFT, padx=(0, 2))
+        ttk.Button(zoom_frame, text="100%", command=self.reset_zoom, width=6).pack(side=tk.LEFT, padx=(0, 2))
         
         # Canvas for image display
         self.canvas = tk.Canvas(output_frame, bg="white", width=600, height=600)
-        self.canvas.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.canvas.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Bind mouse events for zoom and pan
+        self.canvas.bind("<MouseWheel>", self.on_mousewheel)
+        self.canvas.bind("<Button-4>", self.on_mousewheel)  # Linux scroll up
+        self.canvas.bind("<Button-5>", self.on_mousewheel)  # Linux scroll down
+        self.canvas.bind("<Button-1>", self.on_drag_start)
+        self.canvas.bind("<B1-Motion>", self.on_drag_motion)
+        self.canvas.bind("<ButtonRelease-1>", self.on_drag_end)
+        
+        # Bind keyboard events for image movement (only when canvas has focus)
+        self.canvas.bind("<Left>", self.move_image_left)
+        self.canvas.bind("<Right>", self.move_image_right)
+        self.canvas.bind("<Up>", self.move_image_up)
+        self.canvas.bind("<Down>", self.move_image_down)
+        self.canvas.bind("<space>", self.fit_to_window)
+        
+        # Make canvas focusable
+        self.canvas.focus_set()
         
         # Status bar
         self.status_var = tk.StringVar(value="Ready")
@@ -582,39 +629,301 @@ class ZImageGUI:
             return
             
         try:
-            # Resize image to fit canvas
-            canvas_width = 600
-            canvas_height = 600
+            # Store original image
+            self.original_image = image
             
-            # Calculate aspect ratio
-            img_width, img_height = image.size
-            aspect_ratio = img_width / img_height
-            
-            if aspect_ratio > 1:
-                new_width = canvas_width
-                new_height = int(canvas_width / aspect_ratio)
-            else:
-                new_height = canvas_height
-                new_width = int(canvas_height * aspect_ratio)
-            
-            image_resized = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            
-            # Convert to PhotoImage
-            photo = ImageTk.PhotoImage(image_resized)
-            
-            # Display on canvas
-            self.canvas.delete("all")
-            x = (canvas_width - new_width) // 2
-            y = (canvas_height - new_height) // 2
-            self.canvas.create_image(x, y, anchor=tk.NW, image=photo)
-            
-            # Keep reference
-            self.canvas.image = photo
-            self.status_var.set(f"Image displayed: {img_width}x{img_height}")
+            # Fit to window by default
+            self.fit_to_window()
             
         except Exception as e:
             self.status_var.set(f"Error displaying image: {str(e)}")
             messagebox.showerror("Display Error", f"Failed to display image: {str(e)}")
+    
+    def update_canvas_image(self):
+        """Update the canvas with the current zoom level and position"""
+        if not hasattr(self, 'original_image') or self.original_image is None:
+            return
+            
+        # Get canvas dimensions
+        canvas_width = self.canvas.winfo_width()
+        canvas_height = self.canvas.winfo_height()
+        
+        if canvas_width <= 1 or canvas_height <= 1:
+            # Canvas not yet rendered, use default values
+            canvas_width = 600
+            canvas_height = 600
+        
+        # Calculate display size with zoom
+        img_width, img_height = self.original_image.size
+        display_width = int(img_width * self.zoom_level)
+        display_height = int(img_height * self.zoom_level)
+        
+        # Resize image for display
+        if self.zoom_level != 1.0:
+            display_image = self.original_image.resize((display_width, display_height), Image.Resampling.LANCZOS)
+        else:
+            display_image = self.original_image
+        
+        # Convert to PhotoImage
+        photo = ImageTk.PhotoImage(display_image)
+        
+        # Clear canvas and display image
+        self.canvas.delete("all")
+        
+        # Calculate position to center image if at fit-to-window or initial position
+        if self.image_x == 0 and self.image_y == 0:
+            self.image_x = (canvas_width - display_width) // 2
+            self.image_y = (canvas_height - display_height) // 2
+        
+        self.canvas_image = self.canvas.create_image(self.image_x, self.image_y, anchor=tk.NW, image=photo)
+        
+        # Keep reference to prevent garbage collection
+        self.canvas.image = photo
+        
+        # Update status
+        self.status_var.set(f"Image displayed: {img_width}x{img_height} at {int(self.zoom_level * 100)}%")
+    
+    def zoom_in(self):
+        """Zoom in the image"""
+        if self.zoom_level < self.max_zoom:
+            # Store current center position before zooming
+            canvas_center_x = self.canvas.winfo_width() / 2
+            canvas_center_y = self.canvas.winfo_height() / 2
+            
+            # Calculate image center relative to canvas
+            img_width, img_height = self.original_image.size
+            current_display_width = int(img_width * self.zoom_level)
+            current_display_height = int(img_height * self.zoom_level)
+            
+            image_center_x = self.image_x + current_display_width / 2
+            image_center_y = self.image_y + current_display_height / 2
+            
+            # Update zoom level
+            self.zoom_level = min(self.zoom_level + self.zoom_step, self.max_zoom)
+            
+            # Calculate new display size
+            new_display_width = int(img_width * self.zoom_level)
+            new_display_height = int(img_height * self.zoom_level)
+            
+            # Adjust position to keep the same point centered
+            self.image_x = image_center_x - new_display_width / 2
+            self.image_y = image_center_y - new_display_height / 2
+            
+            self.update_canvas_image()
+            self.update_zoom_label()
+    
+    def zoom_out(self):
+        """Zoom out the image"""
+        if self.zoom_level > self.min_zoom:
+            # Store current center position before zooming
+            canvas_center_x = self.canvas.winfo_width() / 2
+            canvas_center_y = self.canvas.winfo_height() / 2
+            
+            # Calculate image center relative to canvas
+            img_width, img_height = self.original_image.size
+            current_display_width = int(img_width * self.zoom_level)
+            current_display_height = int(img_height * self.zoom_level)
+            
+            image_center_x = self.image_x + current_display_width / 2
+            image_center_y = self.image_y + current_display_height / 2
+            
+            # Update zoom level
+            self.zoom_level = max(self.zoom_level - self.zoom_step, self.min_zoom)
+            
+            # Calculate new display size
+            new_display_width = int(img_width * self.zoom_level)
+            new_display_height = int(img_height * self.zoom_level)
+            
+            # Adjust position to keep the same point centered
+            self.image_x = image_center_x - new_display_width / 2
+            self.image_y = image_center_y - new_display_height / 2
+            
+            self.update_canvas_image()
+            self.update_zoom_label()
+    
+    def fit_to_window(self, event=None):
+        """Fit image to window size"""
+        if not hasattr(self, 'original_image') or self.original_image is None:
+            return
+            
+        # Get canvas dimensions
+        canvas_width = self.canvas.winfo_width()
+        canvas_height = self.canvas.winfo_height()
+        
+        if canvas_width <= 1 or canvas_height <= 1:
+            # Canvas not yet rendered, use default values
+            canvas_width = 600
+            canvas_height = 600
+        
+        # Get image dimensions
+        img_width, img_height = self.original_image.size
+        
+        # Calculate zoom to fit image within canvas
+        width_ratio = canvas_width / img_width
+        height_ratio = canvas_height / img_height
+        
+        # Use the smaller ratio to fit the entire image
+        self.zoom_level = min(width_ratio, height_ratio, 1.0)  # Don't zoom in beyond 100%
+        
+        # Center the image
+        self.center_image_on_zoom()
+        
+        # Update display
+        self.update_canvas_image()
+        self.update_zoom_label()
+    
+    def reset_zoom(self):
+        """Reset zoom to 100% and center the image"""
+        self.zoom_level = 1.0
+        self.center_image_on_zoom()
+        self.update_canvas_image()
+        self.update_zoom_label()
+    
+    def center_image_on_zoom(self):
+        """Center the image when zooming"""
+        canvas_width = self.canvas.winfo_width()
+        canvas_height = self.canvas.winfo_height()
+        
+        if canvas_width <= 1 or canvas_height <= 1:
+            return
+            
+        img_width, img_height = self.original_image.size
+        display_width = int(img_width * self.zoom_level)
+        display_height = int(img_height * self.zoom_level)
+        
+        # Center the image on the canvas
+        self.image_x = (canvas_width - display_width) // 2
+        self.image_y = (canvas_height - display_height) // 2
+    
+    def update_zoom_label(self):
+        """Update the zoom percentage label"""
+        self.zoom_label.config(text=f"{int(self.zoom_level * 100)}%")
+    
+    def on_mousewheel(self, event):
+        """Handle mouse wheel zoom"""
+        # Get mouse position relative to canvas
+        mouse_x = event.x if hasattr(event, 'x') else self.canvas.winfo_width() / 2
+        mouse_y = event.y if hasattr(event, 'y') else self.canvas.winfo_height() / 2
+        
+        # Calculate image center relative to canvas before zoom
+        img_width, img_height = self.original_image.size
+        current_display_width = int(img_width * self.zoom_level)
+        current_display_height = int(img_height * self.zoom_level)
+        
+        # Calculate where the mouse is in the image coordinates
+        mouse_image_x = mouse_x - self.image_x
+        mouse_image_y = mouse_y - self.image_y
+        
+        # Determine zoom direction
+        if event.delta:
+            # Windows
+            if event.delta > 0:
+                if self.zoom_level < self.max_zoom:
+                    self.zoom_level = min(self.zoom_level + self.zoom_step, self.max_zoom)
+                else:
+                    return
+            else:
+                if self.zoom_level > self.min_zoom:
+                    self.zoom_level = max(self.zoom_level - self.zoom_step, self.min_zoom)
+                else:
+                    return
+        else:
+            # Linux
+            if event.num == 4:
+                if self.zoom_level < self.max_zoom:
+                    self.zoom_level = min(self.zoom_level + self.zoom_step, self.max_zoom)
+                else:
+                    return
+            elif event.num == 5:
+                if self.zoom_level > self.min_zoom:
+                    self.zoom_level = max(self.zoom_level - self.zoom_step, self.min_zoom)
+                else:
+                    return
+            else:
+                return
+        
+        # Calculate new display size
+        new_display_width = int(img_width * self.zoom_level)
+        new_display_height = int(img_height * self.zoom_level)
+        
+        # Adjust position to keep the mouse over the same point in the image
+        new_mouse_image_x = mouse_image_x * (new_display_width / current_display_width) if current_display_width > 0 else mouse_image_x
+        new_mouse_image_y = mouse_image_y * (new_display_height / current_display_height) if current_display_height > 0 else mouse_image_y
+        
+        self.image_x = mouse_x - new_mouse_image_x
+        self.image_y = mouse_y - new_mouse_image_y
+        
+        self.update_canvas_image()
+        self.update_zoom_label()
+    
+    def on_drag_start(self, event):
+        """Start dragging for panning"""
+        self.drag_start_x = event.x
+        self.drag_start_y = event.y
+        self.canvas.config(cursor="fleur")
+    
+    def on_drag_motion(self, event):
+        """Handle dragging motion for panning"""
+        if self.drag_start_x is not None:
+            dx = event.x - self.drag_start_x
+            dy = event.y - self.drag_start_y
+            
+            # Update image position
+            self.image_x += dx
+            self.image_y += dy
+            
+            # Update drag start position
+            self.drag_start_x = event.x
+            self.drag_start_y = event.y
+            
+            # Update canvas
+            self.update_canvas_image()
+    
+    def on_drag_end(self, event):
+        """End dragging"""
+        self.drag_start_x = None
+        self.drag_start_y = None
+        self.canvas.config(cursor="")
+    
+    def move_image_left(self, event):
+        """Move image left using arrow key"""
+        self.image_x -= 20
+        self.update_canvas_image()
+    
+    def move_image_right(self, event):
+        """Move image right using arrow key"""
+        self.image_x += 20
+        self.update_canvas_image()
+    
+    def move_image_up(self, event):
+        """Move image up using arrow key"""
+        self.image_y -= 20
+        self.update_canvas_image()
+    
+    def move_image_down(self, event):
+        """Move image down using arrow key"""
+        self.image_y += 20
+        self.update_canvas_image()
+    
+    def on_prompt_focus_in(self, event):
+        """Handle prompt text box getting focus"""
+        # Remove canvas keyboard bindings when prompt is focused
+        self.canvas.unbind("<Left>")
+        self.canvas.unbind("<Right>")
+        self.canvas.unbind("<Up>")
+        self.canvas.unbind("<Down>")
+        self.canvas.unbind("<space>")
+    
+    def on_prompt_focus_out(self, event):
+        """Handle prompt text box losing focus"""
+        # Restore canvas keyboard bindings when prompt loses focus
+        self.canvas.bind("<Left>", self.move_image_left)
+        self.canvas.bind("<Right>", self.move_image_right)
+        self.canvas.bind("<Up>", self.move_image_up)
+        self.canvas.bind("<Down>", self.move_image_down)
+        self.canvas.bind("<space>", self.fit_to_window)
+        # Return focus to canvas for image navigation
+        self.canvas.focus_set()
     
     def save_output(self):
         if not self.current_image:
