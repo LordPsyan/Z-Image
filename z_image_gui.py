@@ -126,7 +126,7 @@ class ZImageGUI:
         prompt_frame = ttk.LabelFrame(control_frame, text="Prompt", padding="5")
         prompt_frame.pack(fill=tk.X, pady=(0, 10))
         
-        self.prompt_text = scrolledtext.ScrolledText(prompt_frame, height=4, width=40)
+        self.prompt_text = scrolledtext.ScrolledText(prompt_frame, height=8, width=40)
         self.prompt_text.pack(fill=tk.X)
         
         # Bind focus events to prevent arrow key navigation when typing
